@@ -234,30 +234,32 @@ def createDescriptiveBoard(FieldNumbering):
         '''
         returns 500x500 field with encoded values of fields for nice and quick lookup
         '''
-        mask = np.zeros((500,500))
+        masks = [np.zeros((500,500)) for _ in range(72)]
         for i, keypoint in FieldNumbering.items():
                 pos = keypoint.pt
                 r = keypoint.size/2
-                cv2.circle(mask, (int(pos[0]), int(pos[1])), int(r), i, -1)
+                cv2.circle(masks[i-1], (int(pos[0]), int(pos[1])), int(r), i, -1)
 
-        return mask
+        return masks
 
-def createMaskFieldBoard(FieldNumbering):
+def createMaskFieldBoardExistance(FieldNumbering):
         '''
         returns 500x500 field with encoded values of fields for nice and quick lookup
         '''
-        mask = np.zeros((500,500))
-        for keypoint in FieldNumbering.values():
+        masks = [np.zeros((500,500)) for _ in range(72)]
+        for i, keypoint in enumerate(FieldNumbering.values()):
                 pos = keypoint.pt
                 r = keypoint.size/2
-                cv2.circle(mask, (int(pos[0]), int(pos[1])), int(r), 255, -1)
+                cv2.circle(masks[i], (int(pos[0]), int(pos[1])), int(r), 255, -1)
 
-        return mask
+        return masks
 
 
 if __name__ == "__main__":
     
     prev = cv2.imread('version2.png')
     FieldNumbering, FieldDescription = get_grid(prev)
-    createMaskFieldBoard(FieldNumbering)
+    masks = createMaskFieldBoardExistance(FieldNumbering)
+    cv2.imshow("mask wow", masks[1])
+    cv2.waitKey(0)
     

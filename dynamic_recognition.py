@@ -1,6 +1,7 @@
 # goal of this file is to basically see where tokens are
 import cv2
 import numpy as np
+import random
 from config import *
 def four_point_transform(image, pts):
     '''
@@ -56,7 +57,7 @@ def order_points(pts):
         rect[3] = pts[np.argmax(diff[:,0])][:2] + [WIDTH_BOXIE, WIDTH_BOXIE]
         return rect
 
-def get_tokens(frame, title = " default gray blob token detection on difference"):
+def get_token_placement(frame, maskFieldExistances, maskFieldDescriptions, title = " default gray blob token detection on difference"):
         frame_copy = frame.copy()
         frame_blurred = cv2.medianBlur(frame_copy, 3)
         frame_gray = cv2.cvtColor(frame_blurred, cv2.COLOR_BGR2GRAY)
@@ -87,7 +88,42 @@ def get_tokens(frame, title = " default gray blob token detection on difference"
                     (int(pos[0]), int(pos[1])),
                     cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
         resized_eroded = cv2.resize(erosion,(500,500), interpolation = cv2.INTER_AREA)
-
-        #cv2.imshow("token_detection", resized_eroded)
         
-        return frame_copy
+        scoresForFields = dict()
+        for i, maskField in enumerate(maskFieldExistances, start=1):
+            scoresForFields[i] = np.sum(resized_eroded[maskField == 255]) + random.random()
+        temp = sorted(scoresForFields.items(),  key=lambda x: x[1])[-8:]
+        indicesOfFields = list(dict(temp).keys())
+        print("indices_of fields: ", indicesOfFields)
+        
+        
+        masks_temp = [maskFieldExistances[i - 1] for i in indicesOfFields]
+        fields = masks_temp[0] + masks_temp[1] + masks_temp[2] + masks_temp[3] + masks_temp[4] + masks_temp[5] + masks_temp[6] + masks_temp[7]
+        cv2.imshow("fields", fields)
+        
+        cv2.imshow("token_detection" +str(resized_eroded.shape) , resized_eroded)
+        
+        return resized_eroded , indicesOfFields
+    
+    
+def get_token_color_groups(board, tokenFields, difference, masksExistance):
+    overallColors = dict()
+    reds = dict()
+    blues = dict()
+    yellows = dict()
+    greens = dict()
+    boardHsv = cv2.cvtColor(board, cv2.COLOR_BGR2HSV)
+    h = boardHsv[:,:,0]
+    for tokenField in tokenFields:
+        wights = difference[masksExistance[tokenField- 1] == 255]
+        max_weight = max(wights)
+        normalized_weights = [i / max_weight for i in wights]
+        colors = h[masksExistance[tokenField - 1] == 255]
+        print("shape h", h.shape, " shape masksExistance", (masksExistance[tokenField - 1] == 255).shape)
+
+        overallColors[tokenField - 1] = np.sum(colors * normalized_weights)/ sum(normalized_weights)
+    print("colors", overallColors)
+    return overallColors
+
+        
+

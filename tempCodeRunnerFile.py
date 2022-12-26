@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 import random
 import matplotlib.pyplot as plt 
-from static_recognition import find_squares
-from dynamic_recognition import four_point_transform
+from static_recognition import find_squares, get_grid, createDescriptiveBoard, createMaskFieldBoardExistance
+from dynamic_recognition import four_point_transform, get_token_placement, get_token_color_groups
 from config import *
 from random import randint
 trackerTypes = ['BOOSTING']#, 'MIL', 'KCF','TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
@@ -192,7 +192,6 @@ if __name__ == "__main__":
         colors.append((randint(0, 255), randint(0, 255), randint(0, 255)))
     cap = cv2.VideoCapture(input_video_path)
     boxes = dict()
-    print(cv2.__version__)
     board_box = dict()
     recalculate_board = True
     
@@ -211,8 +210,11 @@ if __name__ == "__main__":
     
     prev = cv2.imread('version2.png')
     dim = (500,500)
+    FieldNumbering, FieldDescription = get_grid(prev)
+    maskFieldExistance = createMaskFieldBoardExistance(FieldNumbering)
+    maskFieldDescription = createDescriptiveBoard(FieldNumbering)
     prev = cv2.resize(prev, dim, interpolation = cv2.INTER_AREA)
-    get_corner_players(prev)
+    #get_corner_players(prev)
     bbox = (88, 68, 886, 920)
     multiTracker = cv2.MultiTracker_create()
     # Initialize MultiTracker
@@ -222,27 +224,27 @@ if __name__ == "__main__":
                 for trackerType in trackerTypes:
                         multiTracker.add(createTrackerByName(trackerType), frame, (corner[0] - WIDTH_BOXIE , corner[1] -WIDTH_BOXIE, 40, 40))
     while(cap.isOpened()):
+        noHands = False
 
         ret, frame = cap.read()
         
         frame_2, score = calculate_hands(frame, "lol")
-        if score < 15000000:
+        if score < 15000000: # value set by trial and error
+                noHands = True
                 success, boxes = multiTracker.update(frame)
+                pass
         print("boxes: ", boxes)
         
-        timer = cv2.getTickCount()
-        fps = cv2.getTickFrequency() / (cv2.getTickCount())
+
         if ok:
                 for i, newbox in enumerate(boxes):
+                        print("newbox: ", newbox)
                         p1 = (int(newbox[0]), int(newbox[1]))
                         p2 = (int(newbox[0] + newbox[2]), int(newbox[1] + newbox[3]))
                         cv2.rectangle(frame, p1, p2, colors[i], 2, 1)
         else :
                 cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
-        cv2.putText(frame, " Tracker", (100,20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50),2)
-        cv2.putText(frame, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2)
 
-        
         if recalculate_board:
                 #frame2, tresh, boxes = find_squares(frame, boxes)
                 pass
@@ -256,15 +258,12 @@ if __name__ == "__main__":
         frame = four_point_transform(frame, boxes)
 
 
-        scale_percent = 50 # percent of original size
-
         width = 500
         height = 500
         dim = (width, height)
 
         resized_no_blobs = cv2.resize(frame, dim, interpolation = cv2.INTER_AREA)
-        get_corner_players(resized_no_blobs)
-        resized_blobs = cv2.resize(frame_w_blobs, dim, interpolation = cv2.INTER_AREA)
+        #get_corner_players(resized_no_blobs)
         
         #cv2.imshow("frame with blobs", resized_blobs)
         if prev is not None:
@@ -279,7 +278,8 @@ if __name__ == "__main__":
                 #difference[mask != 255] = [0, 0, 255]
         
                 #resized2 = cv2.resize(difference, dim, interpolation = cv2.INTER_AREA)
-                blobous_difference = get_tokens(difference)
+                blobous_difference, tokensPlacement = get_token_placement(difference, maskFieldExistance, maskFieldDescription)
+                color_dict = get_token_color_groups(resized_no_blobs,tokensPlacement,blobous_difference, maskFieldExistance)
                 cv2.imshow("difference", blobous_difference)
 
         res = cv2.waitKey(1)

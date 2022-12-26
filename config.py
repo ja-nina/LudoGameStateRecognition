@@ -56,3 +56,9 @@ redHomeOffset = 40
 redBaseOffset = 56
 
 
+hsvGreenRange = (40,80)
+hsvYellowRange = (25,35)
+hsvBlueRange = (105,130)
+hsvRedRange1 = (0,10)
+hsvRedRange2 = (150,180)
+
