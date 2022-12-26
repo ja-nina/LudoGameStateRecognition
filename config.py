@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 input_video_path = 'videos/IMG_1912.mp4'
 
 # HEURISTIC: TODO ADJUST TO BOARD SIZE
@@ -46,3 +48,11 @@ red = (0,0,250)
 blue = (250,0,0)
 green = (0,250,0)
 yellow = (0,255,255)
+
+
+
+
+redHomeOffset = 40
+redBaseOffset = 56
+
+

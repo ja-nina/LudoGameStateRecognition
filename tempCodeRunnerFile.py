@@ -1,7 +1,6 @@
 import cv2 
 import numpy as np
 import random
-from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt 
 import itertools
 from config import *

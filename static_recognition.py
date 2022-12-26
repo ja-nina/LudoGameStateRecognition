@@ -1,11 +1,12 @@
-from config import *
 import cv2
 import numpy as np
 import itertools
 import random
 
+from scipy.spatial.distance import cdist
+from config import *
+
 def closest_node(node, nodes):
-    print(nodes, node)
     if len(nodes) == 0:
         return 0, np.Inf
     distances = cdist([node], nodes)
@@ -62,7 +63,7 @@ def _getNextRegularField(regularFieldsUnvisited, regularFieldsVisited, lastPosit
                 # stop if no points to visit
                 return regularFieldsVisited
 
-        sortedUnvisited = sorted(regularFieldsUnvisited.items(), key=lambda x: abs(x[0][0] + x[0][1] - lastPosition[0] - lastPosition[1]))
+        sortedUnvisited = sorted(regularFieldsUnvisited.items(), key=lambda x: abs(x[0][0]  - lastPosition[0])+ abs(x[0][1] - lastPosition[1]))
         newPosition = sortedUnvisited[0][0]
         newKeyPoint = sortedUnvisited[0][1]
         regularFieldsVisited[i] = newKeyPoint
@@ -85,9 +86,11 @@ def createHashmapRegularFields(regularFields):
 
         regularFieldsVisited = dict([(i, keypoint) for i, keypoint in enumerate(list(topFields.values()))])
         regularFieldsUnvisited = dict([(key, value) for key, value in regularFields.items() if value not in regularFieldsVisited.values()])
+        print(regularFields, regularFieldsVisited)
         lastPosition = regularFieldsVisited[len(regularFieldsVisited) - 1].pt
 
-        regularFieldsVisited = _getNextRegularField(regularFieldsUnvisited, regularFieldsVisited, lastPosition, 4)
+
+        regularFieldsVisited = _getNextRegularField(regularFieldsUnvisited, regularFieldsVisited, lastPosition, 3)
 
         return regularFieldsVisited
 
@@ -112,9 +115,6 @@ def get_blobs(frame, draw = True, title = "default gray blob detection"):
                 
                 if draw:
                         cv2.circle(frame_copy, (int(pos[0]), int(pos[1])), int(r), (255, 0, 0), 2)
-                        # cv2.putText(frame_copy, str(blob.response),
-                        # (int(pos[0]), int(pos[1])),
-                        #   cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
         
         resized = cv2.resize(frame_copy, (500,500), interpolation = cv2.INTER_AREA)
         if draw:
@@ -125,10 +125,26 @@ def get_blobs(frame, draw = True, title = "default gray blob detection"):
 def get_grid(empty_board):
         '''
         TODO: break down into smaller functions
+
         1. gets regular fields
         2. gets base coordinates
         3. gets home coordinates
         4. geterimes which base is whos etc (by use of other functions)
+        5. scale to 500x500
+
+        @return dictionnary assigning fields to numbers, as below       
+                REGULAR FIELDS : 1-40
+                HOMES:
+                - 41-44 red home
+                - 45-48 blue home
+                - 49-52 yellow home
+                - 53-56 green home
+                BASES:
+                - 57-60 red base
+                - 61-64 blue base
+                - 65-68 yellow base
+                - 69-72 green base
+        @return dictionnary field number and what it means (verbally)
         '''
         empty_drawn_blobs, circles = get_blobs(empty_board, title = "try on empty", draw = False)
         board_width, board_height, _ = empty_board.shape
@@ -138,7 +154,6 @@ def get_grid(empty_board):
                 r = circle.size/2
                 if r > R_CIRCLE_FIELD * (1 - R_CIRCLE_ACCEPTANCE_THERESHOLD) and  r < R_CIRCLE_FIELD * (1 + R_CIRCLE_ACCEPTANCE_THERESHOLD):
                         fields[(int(pos[0]), int(pos[1]))] =  circle
-                        #cv2.circle(empty_drawn_blobs, (int(pos[0]), int(pos[1])), int(r), (255, 0, 0), 2)
 
 
         # GET BASE 
@@ -147,16 +162,16 @@ def get_grid(empty_board):
         temp_tr_bl = sorted({key[0] + board_height - key[1] + random.random(): val for key, val in fields.items()}.items())
        
         # top left
-        tl_base =dict(temp_tl_br[:4])
+        tl_base =dict([(i,val) for i,val in enumerate(list(dict(temp_tl_br[:4]).values()))])
         
         # bottom right
-        br_base = dict(temp_tl_br[-4:])
+        br_base = dict([(i,val) for i,val in enumerate(list(dict(temp_tl_br[-4:]).values()))])
 
         # top right
-        tr_base  = dict(temp_tr_bl[-4:])
+        tr_base  = dict([(i,val) for i,val in enumerate(list(dict(temp_tr_bl[-4:]).values()))])
 
         # bottom left
-        bl_base  = dict(temp_tr_bl[:4])
+        bl_base  = dict([(i,val) for i,val in enumerate(list(dict(temp_tr_bl[:4]).values()))])
 
         # GET HOME
         # EXPLANATION OF BOARD NOTATION:
@@ -191,24 +206,58 @@ def get_grid(empty_board):
         regularFields = dict([(key, value) for key, value in fields.items() if value not in base_and_home_keypoints])
         regularFieldsNumbered = createHashmapRegularFields(regularFields)
 
-        colors = (0,0,0)*40
-        for field, color in zip(regularFieldsNumbered.items(), colors):
-                i, circle = field[0], field[1]
-                pos = circle.pt
-                r = circle.size/2
-                cv2.circle(empty_drawn_blobs, (int(pos[0]), int(pos[1])), int(r), color, 10)
-                cv2.putText(empty_drawn_blobs, str(i),
-                        (int(pos[0]), int(pos[1])),
-                          cv2.FONT_HERSHEY_PLAIN, 5, color)
+        # directory with hash with modulo 40 for regular points
 
-        # directory with hash with modulo 40
+        # assuming tr is blue, br is green, bl is yellow and tl is red - read board will be rotated
+        # each filed gets assigned a number and then the number is checked (what it means)
+        ListOfFieldDictionnaries = [regularFieldsNumbered, tl_home, tr_home, bl_home, br_home, tl_base, tr_base, bl_base, br_base]
+        ListOfDescription = ['RegularField']*40 + ['Red Home']*4 +  ['Blue Home']*4 +['Yellow Home']*4 +['Green Home']*4 +['Red Base']*4 +['Blue Base']*4 +['Yellow Base']*4 +['Green Base']*4
+        DescriptionDictionnaryFinal = dict([(i + 1, description) for i, description in enumerate(ListOfDescription)])
+        FieldDictionnaryFinal = dict()
+        l = 1
+
+        scale = 1000/(empty_board.shape[0]+ empty_board.shape[1])
+
+        for dictionnary in ListOfFieldDictionnaries:
+                for i, keypoint in dictionnary.items():
+                        keypoint.pt = (keypoint.pt[0]*scale, keypoint.pt[1]*scale)
+                        keypoint.size = keypoint.size*scale
+                        FieldDictionnaryFinal[i + l] = keypoint
+                l = l + i + 1
+
+        # scaled to 500x500 for easier processing
+
+        return FieldDictionnaryFinal, DescriptionDictionnaryFinal
 
 
-        resized_board = cv2.resize(empty_drawn_blobs, (500,500), interpolation = cv2.INTER_AREA)
-        cv2.imshow("empty_board_blobs " + str(len(circles)) + " size :" + str(r) , resized_board)
+def createDescriptiveBoard(FieldNumbering):
+        '''
+        returns 500x500 field with encoded values of fields for nice and quick lookup
+        '''
+        mask = np.zeros((500,500))
+        for i, keypoint in FieldNumbering.items():
+                pos = keypoint.pt
+                r = keypoint.size/2
+                cv2.circle(mask, (int(pos[0]), int(pos[1])), int(r), i, -1)
+
+        return mask
+
+def createMaskFieldBoard(FieldNumbering):
+        '''
+        returns 500x500 field with encoded values of fields for nice and quick lookup
+        '''
+        mask = np.zeros((500,500))
+        for keypoint in FieldNumbering.values():
+                pos = keypoint.pt
+                r = keypoint.size/2
+                cv2.circle(mask, (int(pos[0]), int(pos[1])), int(r), 255, -1)
+
+        return mask
 
 
 if __name__ == "__main__":
     
     prev = cv2.imread('version2.png')
-    get_grid(prev)
+    FieldNumbering, FieldDescription = get_grid(prev)
+    createMaskFieldBoard(FieldNumbering)
+    
