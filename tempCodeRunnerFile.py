@@ -233,12 +233,10 @@ if __name__ == "__main__":
                 noHands = True
                 success, boxes = multiTracker.update(frame)
                 pass
-        print("boxes: ", boxes)
         
 
         if ok:
                 for i, newbox in enumerate(boxes):
-                        print("newbox: ", newbox)
                         p1 = (int(newbox[0]), int(newbox[1]))
                         p2 = (int(newbox[0] + newbox[2]), int(newbox[1] + newbox[3]))
                         cv2.rectangle(frame, p1, p2, colors[i], 2, 1)
@@ -254,7 +252,6 @@ if __name__ == "__main__":
         # get mask
         #frame2 = get_blobs(frame)
         
-        print("transform")
         frame = four_point_transform(frame, boxes)
 
 
@@ -274,13 +271,19 @@ if __name__ == "__main__":
                 # color the mask red
                 Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
                 ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255, cv2.THRESH_BINARY_INV |cv2.THRESH_OTSU)
-                
-                #difference[mask != 255] = [0, 0, 255]
-        
-                #resized2 = cv2.resize(difference, dim, interpolation = cv2.INTER_AREA)
                 blobous_difference, tokensPlacement = get_token_placement(difference, maskFieldExistance, maskFieldDescription)
-                color_dict = get_token_color_groups(resized_no_blobs,tokensPlacement,blobous_difference, maskFieldExistance)
+                reds, blues, yellows, greens = get_token_color_groups(resized_no_blobs,tokensPlacement,blobous_difference, maskFieldExistance)
+                
+                for redToken in reds:
+                        resized_no_blobs[maskFieldExistance[redToken - 1] == 255] = (0,0,255)
+                for greenToken in greens:
+                        resized_no_blobs[maskFieldExistance[greenToken - 1] == 255] = (0,255,0)
+                for blueToken in blues:
+                        resized_no_blobs[maskFieldExistance[blueToken - 1] == 255] = (255,0,0)
+                for yellowToken in yellows:
+                        resized_no_blobs[maskFieldExistance[yellowToken - 1] == 255] = (0,255,255)
                 cv2.imshow("difference", blobous_difference)
+                cv2.imshow("pastd tokens", resized_no_blobs)
 
         res = cv2.waitKey(1)
 

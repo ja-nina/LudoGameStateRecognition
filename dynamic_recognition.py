@@ -94,36 +94,48 @@ def get_token_placement(frame, maskFieldExistances, maskFieldDescriptions, title
             scoresForFields[i] = np.sum(resized_eroded[maskField == 255]) + random.random()
         temp = sorted(scoresForFields.items(),  key=lambda x: x[1])[-8:]
         indicesOfFields = list(dict(temp).keys())
-        print("indices_of fields: ", indicesOfFields)
         
         
         masks_temp = [maskFieldExistances[i - 1] for i in indicesOfFields]
-        fields = masks_temp[0] + masks_temp[1] + masks_temp[2] + masks_temp[3] + masks_temp[4] + masks_temp[5] + masks_temp[6] + masks_temp[7]
-        cv2.imshow("fields", fields)
-        
-        cv2.imshow("token_detection" +str(resized_eroded.shape) , resized_eroded)
+        #fields = masks_temp[0] + masks_temp[1] + masks_temp[2] + masks_temp[3] + masks_temp[4] + masks_temp[5] + masks_temp[6] + masks_temp[7]
         
         return resized_eroded , indicesOfFields
     
     
 def get_token_color_groups(board, tokenFields, difference, masksExistance):
     overallColors = dict()
-    reds = dict()
-    blues = dict()
-    yellows = dict()
-    greens = dict()
+    reds = []
+    blues = []
+    yellows = []
+    greens = []
     boardHsv = cv2.cvtColor(board, cv2.COLOR_BGR2HSV)
     h = boardHsv[:,:,0]
     for tokenField in tokenFields:
         wights = difference[masksExistance[tokenField- 1] == 255]
         max_weight = max(wights)
-        normalized_weights = [i / max_weight for i in wights]
+        normalized_weights = np.array([i / max_weight for i in wights])
         colors = h[masksExistance[tokenField - 1] == 255]
-        print("shape h", h.shape, " shape masksExistance", (masksExistance[tokenField - 1] == 255).shape)
+        colors = np.array([color if color > 10 else 180 for color in colors]) # else red is super imbalanced
+        overallColors[tokenField] = np.sum(colors * normalized_weights)/ sum(normalized_weights)
+    
+    reds, blues, yellows, greens = find_color(overallColors, reds, blues, yellows, greens)
+    return reds, blues, yellows, greens
 
-        overallColors[tokenField - 1] = np.sum(colors * normalized_weights)/ sum(normalized_weights)
-    print("colors", overallColors)
-    return overallColors
-
+def find_color(colorHues, reds, blues, yellows, greens):
+    
+    for token_field, colorHue in colorHues.items():
+        print(token_field, colorHue)
+        if int(colorHue) in hsvRedRange1 or int(colorHue) in hsvRedRange2:
+            reds.append(token_field)
+        elif int(colorHue) in hsvBlueRange:
+            blues.append(token_field)
+        elif int(colorHue) in hsvYellowRange:
+            yellows.append(token_field)
+        elif int(colorHue) in hsvGreenRange:
+            greens.append(token_field)
+        else:
+            print("WE GOT A PROBLEM!!!", colorHue)
+            
+    return reds, blues, yellows, greens
         
 
