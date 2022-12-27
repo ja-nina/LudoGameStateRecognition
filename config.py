@@ -62,3 +62,20 @@ hsvBlueRange = range(105,130)
 hsvRedRange1 = range(0,10)
 hsvRedRange2 = range(145,180)
 
+playableColors = ['  red', ' blue', 'yellow', ' green']
+
+# red, blue, yellow, green
+basesFieldNumbers = [tuple(range(41,45)), tuple(range(45, 49)), tuple(range(49, 53)), tuple(range(53,57))]
+homesFieldNumbers = [range(57,61), range(61, 65), range(65, 69), range(69, 73)]
+regulatFieldNUmbers = range(1,41)
+startingFields = [33,3,23,13]
+
+
+# ANIMATION : 
+beigeColor = (203, 215, 223)
+# red, blue, yellow, green
+tokenColors = [(0,0,255),(255,0,0), (0,255,255), (0,255,0)]
+specialFieldColors = [(132,135,240),(195,175,122), (137,174,225), (158,200,178)]
+ROfToken = 10
+heartStencilTemp = cv2.cvtColor(cv2.cv2.imread('heartStencil.png'), cv2.COLOR_BGR2GRAY)
+heartStencil = cv2.threshold(heartStencilTemp, 0, 150, cv2.THRESH_BINARY_INV)[1]

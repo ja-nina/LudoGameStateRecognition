@@ -1,10 +1,12 @@
 import cv2 
 import numpy as np
 import random
+import itertools
 import matplotlib.pyplot as plt 
 from static_recognition import find_squares, get_grid, createDescriptiveBoard, createMaskFieldBoardExistance
 from dynamic_recognition import four_point_transform, get_token_placement, get_token_color_groups
 from config import *
+from itertools import compress
 from random import randint
 trackerTypes = ['BOOSTING']#, 'MIL', 'KCF','TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 def createTrackerByName(trackerType):
@@ -129,7 +131,7 @@ def get_corner_players(board):
         done on aleady resized board 500 x 500
         determines if 'original' board is rotated
         '''
-        print("Shape of board: ", board.shape)
+        #print("Shape of board: ", board.shape)
         width_board, heigh_board, board_depth  = board.shape
         # parametrers 
         margin_t = 20
@@ -171,19 +173,113 @@ def get_corner_players(board):
         # histgreen = cv2.calcHist([h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[1]]],[0],None,[256],[0,256])
         # plt.plot(histgreen,color = colors_t[3])
         
-        print("Sum red: ", np.sum(h[temp_starting_point1[1]:temp_endpoint1[1], temp_starting_point1[0]:temp_endpoint1[0]]))
-        print("Sum green: ", np.sum(h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[0]]))
-        print("Sum yellow: ", np.sum(h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[0]]))
-        print("Sum blue: ", np.sum(h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]))
+        # print("Sum red: ", np.sum(h[temp_starting_point1[1]:temp_endpoint1[1], temp_starting_point1[0]:temp_endpoint1[0]]))
+        # print("Sum green: ", np.sum(h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[0]]))
+        # print("Sum yellow: ", np.sum(h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[0]]))
+        # print("Sum blue: ", np.sum(h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]))
 
 
         return board
 
-def get_who_plays():
-        pass
+def calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players, FieldNumberingToKeypoints, preliminaryFilled):
+        '''
+        1. Render animation of current state of board
+        2. Display text
+        
+        @return image of animation
+        '''
+        height,width = 500,500
+        tokens = [reds, blues, yellows, greens]
+        # ANIMATION
 
-def calculate_circles(image):
+        if preliminaryFilled is None:
+                tempMask = masks[0]
+                for mask in masks[1:]:
+                        tempMask += mask
+                
+                #boardAnimated = np.zeros((height,width,3), np.uint8)
+                #boardAnimated[ :, :, :] = (255,255,255)
+                boardAnimated = cv2.imread('kopernik.png') # make it more fun
+                for i, field in FieldNumberingToKeypoints.items():
+                        cv2.circle(boardAnimated, (int(field.pt[0]), int(field.pt[1])), 15, (0,0,0), 2)
+                        
+                boardAnimated[tempMask > 0, :] = beigeColor
+                preliminaryFilled = boardAnimated
+        
+        filledBoard = preliminaryFilled.copy()
+        heartStencilWidth, heartStencilHeight = heartStencil.shape
+        for tokens, color, isPlayer in zip(tokens, tokenColors, players):
+            if isPlayer is True:
+                for token in tokens:
+                        centerOfToken = FieldNumberingToKeypoints[token].pt
+                        centerOfToken = (int(centerOfToken[0]), int(centerOfToken[1]))
+                        startOfHeart = (centerOfToken[0] - heartStencilWidth//2, centerOfToken[1] - heartStencilHeight//2)
+                        endOfHeart = (startOfHeart[0] + heartStencilWidth, startOfHeart[1] + heartStencilHeight)
+                        filledBoard[startOfHeart[0]: endOfHeart[0], startOfHeart[1]: endOfHeart[1], :][heartStencil < 101, :] = color
 
+                        
+                
+        return filledBoard, preliminaryFilled
+
+
+
+def calculateStatesText(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove):
+        '''
+        players = bool array indicating who is playing against who
+        1. Calculation of dice rolled
+        2. Move conducted
+        3. If players can kill each others tokens!
+        4. Tokens in base
+        5. Tokens in home
+        6. Which players play
+        
+        @return image of animation
+        '''
+        tokens = [reds, blues, yellows, greens]
+        handsMoving = handsMoving
+        playerNames = list(compress(playableColors, players))
+        player1BaseCount, player2BaseCount = [len([token for token in color if token in base]) for color, base in list(zip(list(compress(tokens, players)), list(compress(basesFieldNumbers, players))))]
+        player1HomeCount, player2HomeCount = [len([token for token in color if token in home]) for color, home in list(zip(list(compress(tokens, players)), list(compress(homesFieldNumbers, players))))]
+        player1RegularCount, player2RegularCount  = [[token for token in color if token in regulatFieldNUmbers] for color in list(compress(tokens, players))]
+        startingPlayer1, startingPlayer2 = list(compress(startingFields, players))
+        possibleKillsPlayer1 = dict([(('field ' + str(element[0]), 'field ' + str(element[1])), (element[1] - element[0]) % 40) for element in itertools.product(player1RegularCount, player2RegularCount) if (element[1] - element[0]) % 40 <= 6])
+        if startingPlayer1 in player2RegularCount and player1BaseCount > 0:
+                possibleKillsPlayer1[('base', 'field ' + str(startingPlayer1))] = 6
+                
+        possibleKillsPlayer2 = dict([(('field ' + str(element[0]), 'field ' + str(element[1])), (element[1] - element[0]) % 40) for element in itertools.product(player2RegularCount, player1RegularCount) if (element[1] - element[0]) % 40 <= 6])
+        if startingPlayer2 in player1RegularCount and player2BaseCount > 0:
+                possibleKillsPlayer2[('base', 'field ' + str(startingPlayer2))] = 6
+        
+        textToDisplay = []
+
+        textToDisplay.append("BASE " + playerNames[0] +" : " + str(player1BaseCount) + "/ 4")
+        textToDisplay.append("HOME " + playerNames[0] +" : " + str(player1HomeCount) + "/ 4")
+        textToDisplay.append("BASE " + playerNames[1] +" : " + str(player2BaseCount) + "/ 4")
+        textToDisplay.append("HOME " + playerNames[1] +" : " + str(player2HomeCount) + "/ 4")
+        
+        print("text", textToDisplay)
+        return playerNames[0],playerNames[1], textToDisplay
+
+def displayGame(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove, FieldNumberingToKeypoints, preliminaryFilled):
+        w,h = 1000, 600
+        startBoardX, startStartY = 50, 50
+        player1, player2, textList = calculateStatesText(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove)
+        boardAnimated, preliminaryFilled =  calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players,  FieldNumberingToKeypoints, preliminaryFilled)
+        bw, wh = boardAnimated.shape[0], boardAnimated.shape[1]
+
+        wholeDisplay = np.zeros((h,w,3), np.uint8)
+        wholeDisplay[startBoardX: startBoardX + bw, startStartY: startStartY + wh] = boardAnimated
+        
+        pixelsNextLine = 30
+        
+        cv2.putText(wholeDisplay, player1.upper() + "  VS  "+ player2.upper(), (600,50 ), cv2.FONT_HERSHEY_TRIPLEX, 1,(203,192,255),3)
+        for i, textPiece in enumerate(textList):
+                cv2.putText(wholeDisplay, textPiece, (600,100 + i*pixelsNextLine), cv2.FONT_HERSHEY_TRIPLEX, 0.5,(255,255,255),2)
+        
+        cv2.imshow("whole", wholeDisplay)
+    
+
+def displayStatus():
         pass
         
 if __name__ == "__main__":
@@ -284,6 +380,8 @@ if __name__ == "__main__":
                         resized_no_blobs[maskFieldExistance[yellowToken - 1] == 255] = (0,255,255)
                 cv2.imshow("difference", blobous_difference)
                 cv2.imshow("pastd tokens", resized_no_blobs)
+                
+                displayGame(maskFieldExistance, [True, False, False, True], reds, blues, yellows,greens, 5, False, [True, False, False, True], None, FieldNumbering, None)
 
         res = cv2.waitKey(1)
 
