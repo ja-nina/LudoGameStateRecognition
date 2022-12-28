@@ -24,6 +24,7 @@ upper_green_tokens = np.array([80, 255, 255], dtype="uint8")
 lower_red_tokens = np.array([170, 150, 0], dtype="uint8")
 upper_red_tokens = np.array([180, 255, 255], dtype="uint8")
 
+HANDS_OCCURANCE_THERESHOLD = 15000000
 WIDTH_BOXIE = 20
 R_CIRCLE_FIELD = 36
 R_CIRCLE_ACCEPTANCE_THERESHOLD = 0.1
@@ -79,3 +80,5 @@ specialFieldColors = [(132,135,240),(195,175,122), (137,174,225), (158,200,178)]
 ROfToken = 10
 heartStencilTemp = cv2.cvtColor(cv2.cv2.imread('heartStencil.png'), cv2.COLOR_BGR2GRAY)
 heartStencil = cv2.threshold(heartStencilTemp, 0, 150, cv2.THRESH_BINARY_INV)[1]
+
+dicePics = [cv2.imread('dice/' + str(i) + '.png') for i in range(1,7)]

@@ -6,21 +6,21 @@ input_video_path = 'videos/IMG_1912.mp4'
 
 # Initialize a video feed
 
-params = cv2.SimpleBlobDetector_Params()
+paramsDice = cv2.SimpleBlobDetector_Params()
 
 # Filter by Area
-params.filterByArea = True
-params.minArea = 50
-params.maxArea = 80
+paramsDice.filterByArea = True
+paramsDice.minArea = 50
+paramsDice.maxArea = 80
 # Filter by Circularity
-params.filterByCircularity = True
-params.minCircularity = 0.7
+paramsDice.filterByCircularity = True
+paramsDice.minCircularity = 0.7
 # Filter by Convexity
-params.filterByConvexity = True
-params.minConvexity = 0.7
+paramsDice.filterByConvexity = True
+paramsDice.minConvexity = 0.7
 # Filter by Inertia
-params.filterByInertia = True
-params.minInertiaRatio = 0.7
+paramsDice.filterByInertia = True
+paramsDice.minInertiaRatio = 0.7
 
 lower = (50,0,0)  #130,150,80 # hard set
 upper = (200,200,200) #250,250,120
@@ -31,7 +31,7 @@ def get_blobs(frame):
     frame[mask > 0] = 0
     frame_blurred = cv2.medianBlur(frame, 7)
     frame_gray = cv2.cvtColor(frame_blurred, cv2.COLOR_BGR2GRAY)
-    blobs = detector.detect(frame_gray)
+    blobs = detectorDice.detect(frame_gray)
     return blobs
 
 def get_dice_from_blobs(blobs):
@@ -62,14 +62,22 @@ def overlay_info(frame, dice, blobs):
                         int(dice[2] + textsize[1] / 2)),
                         cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
 
+def getDiceValue(frame):
+    blobs = get_blobs(frame, detectorDice)
+    dice = get_dice_from_blobs(blobs)
+    if len(dice) == 0:
+        return 0
+    else: return dice[0]
+
+    
 if __name__ == "__main__":
     cap = cv2.VideoCapture(input_video_path)
-    detector = cv2.SimpleBlobDetector_create(params)
+    detectorDice = cv2.SimpleBlobDetector_create(paramsDice)
     while(cap.isOpened()):
 
         ret, frame = cap.read()
 
-        blobs = get_blobs(frame)
+        blobs = get_blobs(frame, detectorDice)
         dice = get_dice_from_blobs(blobs)
         out_frame = overlay_info(frame, dice, blobs)
 
