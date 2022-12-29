@@ -8,7 +8,6 @@ def four_point_transform(image, pts):
     Transforms photo of board in a weird angle into nice board that can be compared to field placements of original
     '''
     rect = order_points(pts)
-    print("rect: ",  rect)
     (tl, tr, br, bl) = rect
 
     # compute the width of the new image, which will be the
@@ -45,14 +44,11 @@ def four_point_transform(image, pts):
 
 
 def order_points(pts):
-        print(pts)
         rect = np.zeros((4, 2), dtype = "float32")
         s = pts.sum(axis = 1)
-        print("lol", s, np.argmin(s), pts[1][:2])
         rect[0] = pts[np.argmin(s)][:2] + [WIDTH_BOXIE, WIDTH_BOXIE]
         rect[2] = pts[np.argmax(s)][:2] + [WIDTH_BOXIE, WIDTH_BOXIE]
         diff = np.diff(pts, axis = 1)
-        print(diff[:,0], np.argmin(diff))
         rect[1] = pts[np.argmin(diff[:,0])][:2] + [WIDTH_BOXIE, WIDTH_BOXIE]
         rect[3] = pts[np.argmax(diff[:,0])][:2] + [WIDTH_BOXIE, WIDTH_BOXIE]
         return rect
@@ -60,7 +56,10 @@ def order_points(pts):
 def get_token_placement(frame, maskFieldExistances, maskFieldDescriptions, title = " default gray blob token detection on difference"):
         frame_copy = frame.copy()
         frame_blurred = cv2.medianBlur(frame_copy, 3)
-        frame_gray = cv2.cvtColor(frame_blurred, cv2.COLOR_BGR2GRAY)
+        #frame_gray = cv2.cvtColor(frame_blurred, cv2.COLOR_BGR2GRAY)
+        frame_gray = frame_blurred
+                #cv2.imshow("frame_gray", frame_gray)
+                #cv2.waitKey(0)
         mask = cv2.inRange(frame_gray, 60, 255)
         #mask = cv2.inRange(frame_hsv, lower_green_tokens, upper_green_tokens)
         #mask = cv2.inRange(frame_hsv, lower_red_tokens, upper_red_tokens)
@@ -76,27 +75,27 @@ def get_token_placement(frame, maskFieldExistances, maskFieldDescriptions, title
         
         # erode the image
         #erosion = cv2.erode(frame_gray, kernel, iterations=1)
+
         erosion = frame_gray
-        blobs = detector.detect(erosion)
+        #cv2.imshow('erosion', frame_gray)
+        #blobs = detector.detect(erosion)
 
         # overlaying info 
-        for blob in blobs:
-                pos = blob.pt
-                r = blob.size / 2
-                cv2.circle(erosion, (int(pos[0]), int(pos[1])), int(r), (255, 0, 0), 2)
-                cv2.putText(erosion, str(blob.response),
-                    (int(pos[0]), int(pos[1])),
-                    cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
+        # for blob in blobs:
+        #         pos = blob.pt
+        #         r = blob.size / 2
+        #         cv2.circle(erosion, (int(pos[0]), int(pos[1])), int(r), (255, 0, 0), 2)
+        #         cv2.putText(erosion, str(blob.response),
+        #             (int(pos[0]), int(pos[1])),
+        #             cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
         resized_eroded = cv2.resize(erosion,(500,500), interpolation = cv2.INTER_AREA)
         
         scoresForFields = dict()
         for i, maskField in enumerate(maskFieldExistances, start=1):
             scoresForFields[i] = np.sum(resized_eroded[maskField == 255]) + random.random()
         temp = sorted(scoresForFields.items(),  key=lambda x: x[1])[-8:]
+        
         indicesOfFields = list(dict(temp).keys())
-        
-        
-        masks_temp = [maskFieldExistances[i - 1] for i in indicesOfFields]
         #fields = masks_temp[0] + masks_temp[1] + masks_temp[2] + masks_temp[3] + masks_temp[4] + masks_temp[5] + masks_temp[6] + masks_temp[7]
         
         return resized_eroded , indicesOfFields
@@ -124,15 +123,15 @@ def get_token_color_groups(board, tokenFields, difference, masksExistance):
 def find_color(colorHues, reds, blues, yellows, greens):
     
     for token_field, colorHue in colorHues.items():
-        print(token_field, colorHue)
+        print(colorHue)
         if int(colorHue) in hsvRedRange1 or int(colorHue) in hsvRedRange2:
-            reds.append(token_field)
+            reds.append(token_field)   
         elif int(colorHue) in hsvBlueRange:
-            blues.append(token_field)
+            blues.append(token_field)  
         elif int(colorHue) in hsvYellowRange:
             yellows.append(token_field)
         elif int(colorHue) in hsvGreenRange:
-            greens.append(token_field)
+            greens.append(token_field) 
         else:
             print("WE GOT A PROBLEM!!!", colorHue)
             

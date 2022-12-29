@@ -3,12 +3,223 @@ import numpy as np
 import random
 import itertools
 import matplotlib.pyplot as plt 
-from static_recognition import find_squares, get_grid, createDescriptiveBoard, createMaskFieldBoardExistance
+from static_recognition import find_squares, get_grid, createDescriptiveBoard, createMaskFieldBoardExistance, getShadowMask, getFieldsMask
 from dynamic_recognition import four_point_transform, get_token_placement, get_token_color_groups
 from config import *
 from itertools import compress
 from random import randint
+from sklearn import cluster
 trackerTypes = ['BOOSTING']#, 'MIL', 'KCF','TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+
+playersPlaying = None
+paramsDice = cv2.SimpleBlobDetector_Params()
+
+# Filter by Area
+paramsDice.filterByArea = True
+paramsDice.minArea = 30
+paramsDice.maxArea = 100
+# Filter by Circularity
+paramsDice.filterByCircularity = True
+paramsDice.minCircularity = 0.6
+# Filter by Convexity
+paramsDice.filterByConvexity = True
+paramsDice.minConvexity = 0.6
+# Filter by Inertia
+paramsDice.filterByInertia = True
+paramsDice.minInertiaRatio = 0.6
+
+lower = (0,0,0)  #130,150,80 # hard set
+upper = (0,0,0) #250,250,120
+
+class Game(object):
+        def __init__(self):
+                self._image = None
+                self._text = []
+                self._dice = 0
+                self._players = []
+                self._diceSeries = [0 for i in range(7)]
+                self._noHands = True
+                self._noHandsSeries = [True for i in range(5)]
+                self._tokenPlacements = [[],[]]
+                self._Events = ""
+        
+        @property 
+        def text(self):
+                return self._text
+        @text.setter
+        def text(self, text):
+                self._text = text
+        @property 
+        def image(self):
+                return self._image               
+    
+        @image.setter
+        def image(self, image):
+                self._image = image
+        
+
+        @property 
+        def dice(self):
+                if self.diceSeries.count(self.diceSeries[0]) == len(self.diceSeries):
+                        self._dice = self.diceSeries[0]
+                return self._dice
+                
+        @dice.setter
+        def dice(self, dice):
+                self._dice = dice
+                
+        @property 
+        def diceSeries(self):
+                return self._diceSeries
+                
+        @diceSeries.setter
+        def diceSeries(self, diceSeries):
+                self._diceSeries = diceSeries
+        
+        @property      
+        def players(self):
+                return self._players
+        
+        
+        @players.setter
+        def players(self, players):
+                self._players = players
+                
+        def addDiceValue(self, diceValue):
+                diceSeries = self.diceSeries
+                diceSeries.append(diceValue)
+                diceSeries.pop(0)
+                self.diceSeries = diceSeries
+        
+        @property      
+        def noHands(self):
+                if self.noHandsSeries.count(self.noHandsSeries[0]) == len(self.noHandsSeries) and self.noHandsSeries[0] == True:
+                        self._noHands = self.noHandsSeries[0]
+                else:
+                        self._noHands = False
+                return self._noHands
+        
+        
+        @noHands.setter
+        def noHands(self, noHands):
+                self._noHands = noHands
+                
+        @property 
+        def noHandsSeries(self):
+                return self._noHandsSeries
+                
+        @noHandsSeries.setter
+        def noHandsSeries(self, noHandsSeries):
+                self._noHandsSeries = noHandsSeries
+        
+        def addnoHandsValue(self, noHands):
+                noHandsSeries = self.noHandsSeries
+                noHandsSeries.append(noHands)
+                noHandsSeries.pop(0)
+                self.noHandsSeries = noHandsSeries
+                
+        @property
+        def tokenPlacements(self):
+                return self._tokenPlacements # is a list - player 1 has some placements [0] and player 2 others [1]
+
+        
+        @tokenPlacements.setter
+        def tokenPlacements(self, tokenPlacements):
+                self._tokenPlacements = tokenPlacements
+                
+        @property
+        def Events(self):
+                return self._Events
+    
+        @Events.setter
+        def Events(self, Events):
+                self._Events = Events
+    
+        def checkForTokenPlacementEventKill(self, supposedNewTokenPlacements):
+                # make sure to use fields 1- 40 only
+                #old new
+                possibleKills = dict([((element[0], element[1]), (element[1] - element[0]) % 40) for element in itertools.product(self.tokenPlacements[0], self.tokenPlacements[1]) if (element[1] - element[0]) % 40 <= 6]
+                                     + [((element[0], element[1]), (element[1] - element[0]) % 40) for element in itertools.product(self.tokenPlacements[1], self.tokenPlacements[0]) if (element[1] - element[0]) % 40 <= 6] )
+                reallyPossibleKills = dict([(posKillKey[0], posKillKey[1]) for posKillKey, posKillvalue in possibleKills.items() if posKillvalue == self.dice])
+                
+                p1_tokensOld = self.tokenPlacements[0]
+                p1_tokensSupposed = supposedNewTokenPlacements[0]
+                
+                p2_tokensOld = self.tokenPlacements[1]
+                p2_tokensSupposed = supposedNewTokenPlacements[1]
+
+                differenceP1 = list(set(p1_tokensSupposed) - set(p1_tokensOld)) + list(set(p1_tokensOld) - set(p1_tokensSupposed))
+                differenceP2 = list(set(p2_tokensSupposed) - set(p2_tokensOld)) + list(set(p2_tokensOld) - set(p2_tokensSupposed))
+                
+                differenceP1revised = [element for element in differenceP1 if element < 41]
+                differenceP2revised = [element for element in differenceP2 if element < 41]
+                
+                movements = [movement for movement in reallyPossibleKills if (movement[0] in differenceP1revised and movement[1] in differenceP1revised) 
+                             or (movement[0] in differenceP2revised and movement[1] in differenceP2revised) ]
+                
+                kills = [movement for movement in reallyPossibleKills if (movement[0] in differenceP1revised and movement[1] in differenceP2revised) 
+                             or (movement[0] in differenceP2revised and movement[1] in differenceP1revised) ]
+                
+                self.tokenPlacements = supposedNewTokenPlacements
+                
+                print('movements', movements)
+                print('kills', kills)
+
+                self.Events = "Movements: " + len(movements), " Kills: " + len(kills)
+
+                
+                
+    
+def get_blobsDice(frame, detectorDice):
+    frameCopy = frame.copy()
+    frameBlurred = cv2.medianBlur(frameCopy, 3)
+    frameGray = cv2.cvtColor(frameBlurred, cv2.COLOR_BGR2GRAY)
+    blobs = detectorDice.detect(frameGray)
+    return blobs, frameGray
+
+def get_dice_from_blobs(blobs):
+    
+    X = np.asarray([b.pt for b in blobs if b.pt != None])
+    if len(X) > 0:
+        # Important to set min_sample to 0, as a dice may only have one dot
+        clustering = cluster.DBSCAN(eps=40, min_samples=0).fit(X)
+        dice = []
+        # Calculate centroid of each dice, the average between all a dice's dots
+        X_dice = X[clustering.labels_ == 0]
+        centroid_dice = np.mean(X_dice, axis=0)
+        dice.append([len(X_dice), *centroid_dice])
+
+        return dice
+
+    else:
+        return []
+
+
+def overlay_info(frameOriginal, dice, blobs):
+    frame = frameOriginal.copy()
+    if len(dice) > 0:
+        dice = dice[0]
+        # Overlay dice number
+        textsize = cv2.getTextSize(
+                str(dice[0]), cv2.FONT_HERSHEY_PLAIN, 3, 2)[0]
+
+        cv2.putText(frame, str(dice[0]),
+                        (int(dice[1] - textsize[0] / 2),
+                        int(dice[2] + textsize[1] / 2)),
+                        cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
+        for blob in blobs:
+                cv2.circle(frame, (int(blob.pt[0]),int(blob.pt[1])), 3, (0, 255, 0), -1)
+        return frame
+        
+        
+def getDiceValue(frame):
+    blobs, _ = get_blobsDice(frame, detectorDice)
+    dice = get_dice_from_blobs(blobs)
+    if len(dice) == 0:
+        return 0
+    else: 
+        return dice[0][0]
+    
 def createTrackerByName(trackerType):
        # Create a tracker based on tracker name
         if trackerType == trackerTypes[0]:
@@ -29,10 +240,6 @@ def createTrackerByName(trackerType):
                 tracker = cv2.TrackerCSRT_create()
         else:
                 tracker = None
-                print('Incorrect tracker name')
-                print('Available trackers are:')
-                for t in trackerTypes:
-                        print(t)
 
         return tracker
 
@@ -63,14 +270,11 @@ def calculate_noise(img, prev, board_coords):
                 is_turned = True
                 difference = thresh
         else:
-                print("1")
                 difference = cv2.subtract(thresh, prev)
                 mask[:,:,0] = difference
-                print("2")
-                print(mask[:,:,0])
+
                 image[mask[:,:,:] > 10] = 255
-                print("3")
-                print("difference: ", cv2.countNonZero(difference))
+
         return is_turned, image, thresh
 
 
@@ -126,12 +330,14 @@ def calculate_bases(image):
 def add_tuples(t1,t2):
         return tuple([e1+e2 for e1,e2 in zip(t1,t2)])
 
-def get_corner_players(board):
+def getRotationNeeded(board):
         '''
         done on aleady resized board 500 x 500
         determines if 'original' board is rotated
+        
+        result - how to rotate board
         '''
-        #print("Shape of board: ", board.shape)
+        results = [None, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]
         width_board, heigh_board, board_depth  = board.shape
         # parametrers 
         margin_t = 20
@@ -158,67 +364,63 @@ def get_corner_players(board):
         
 
         board_hsv = cv2.cvtColor(board, cv2.COLOR_BGR2HSV)
-        #cv2.imshow(" Trying bboxes on bases", board)
-        colors_t = ('red','blue', 'yellow', 'green')
         h = board_hsv[:,:,0]
-        # histred = cv2.calcHist([h[temp_starting_point1[1]:temp_endpoint1[1], temp_starting_point1[0]:temp_endpoint1[0]]],[0],None,[256],[0,256])
-        # plt.plot(histred,color = colors_t[0])
         
-        # histblue = cv2.calcHist([h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]],[0],None,[256],[0,256])
-        # plt.plot(histblue,color = colors_t[1])
-        
-        # histyellow = cv2.calcHist([h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[1]]],[0],None,[256],[0,256])
-        # plt.plot(histyellow,color = colors_t[2])
-        
-        # histgreen = cv2.calcHist([h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[1]]],[0],None,[256],[0,256])
-        # plt.plot(histgreen,color = colors_t[3])
-        
-        # print("Sum red: ", np.sum(h[temp_starting_point1[1]:temp_endpoint1[1], temp_starting_point1[0]:temp_endpoint1[0]]))
-        # print("Sum green: ", np.sum(h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[0]]))
-        # print("Sum yellow: ", np.sum(h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[0]]))
-        # print("Sum blue: ", np.sum(h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]))
+        sums = [np.sum(h[temp_starting_point1[1]:temp_endpoint1[1], temp_starting_point1[0]:temp_endpoint1[0]]),
+                np.sum(h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]),
+                np.sum(h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[0]]),
+                np.sum(h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[0]])]
 
+        whichIsRed = np.argmax(sums)
+        
+        return results[whichIsRed]
 
-        return board
-
+def shadowCorrection(image, prev):
+        '''
+        returns new prev adjusted to shadow and score for hands moving, 
+        if any of those scores differ significantly by hue (especially mask) then we know snth is up (hands moving)
+        
+        -> this turned out to be quite a bad idea
+        '''
 def calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players, FieldNumberingToKeypoints, preliminaryFilled):
         '''
         1. Render animation of current state of board
         2. Display text
         
-        @return image of animation
+        @return image of animationq
         '''
         height,width = 500,500
         tokens = [reds, blues, yellows, greens]
         # ANIMATION
 
         if preliminaryFilled is None:
-                tempMask = masks[0]
-                for mask in masks[1:]:
-                        tempMask += mask
-                
+                tempMask = getFieldsMask(masks)
                 #boardAnimated = np.zeros((height,width,3), np.uint8)
                 #boardAnimated[ :, :, :] = (255,255,255)
-                boardAnimated = cv2.imread('kopernik.png') # make it more fun
+                boardAnimated = cv2.imread('backgrounds/baldDog.png') # make it more fun
+                boardAnimated[tempMask > 0, :] = beigeColor
                 for i, field in FieldNumberingToKeypoints.items():
                         cv2.circle(boardAnimated, (int(field.pt[0]), int(field.pt[1])), 15, (0,0,0), 2)
-                        
-                boardAnimated[tempMask > 0, :] = beigeColor
+                        if i < 41:
+                                startX = field.pt[0] - 9
+                                if i < 10:
+                                        startX += 4
+                                cv2.putText(boardAnimated, str(i), (int(startX), int(field.pt[1] + 4)), cv2.FONT_HERSHEY_TRIPLEX, 0.5,(0,0,0),1)
+                
                 preliminaryFilled = boardAnimated
         
+ 
         filledBoard = preliminaryFilled.copy()
         heartStencilWidth, heartStencilHeight = heartStencil.shape
         for tokens, color, isPlayer in zip(tokens, tokenColors, players):
             if isPlayer is True:
                 for token in tokens:
                         centerOfToken = FieldNumberingToKeypoints[token].pt
-                        centerOfToken = (int(centerOfToken[0]), int(centerOfToken[1]))
+                        centerOfToken = (int(centerOfToken[1]), int(centerOfToken[0]))
                         startOfHeart = (centerOfToken[0] - heartStencilWidth//2, centerOfToken[1] - heartStencilHeight//2)
                         endOfHeart = (startOfHeart[0] + heartStencilWidth, startOfHeart[1] + heartStencilHeight)
                         filledBoard[startOfHeart[0]: endOfHeart[0], startOfHeart[1]: endOfHeart[1], :][heartStencil < 101, :] = color
 
-                        
-                
         return filledBoard, preliminaryFilled
 
 
@@ -257,14 +459,38 @@ def calculateStatesText(masks, playersInCorners, reds, blues, yellows, greens, d
         textToDisplay.append("BASE " + playerNames[1] +" : " + str(player2BaseCount) + "/ 4")
         textToDisplay.append("HOME " + playerNames[1] +" : " + str(player2HomeCount) + "/ 4")
         
+        if len(possibleKillsPlayer1) > 0:
+                textToDisplay.append('Tips for ' + playerNames[0] +" : ")
+                for possibleKillTuple, diceValue in possibleKillsPlayer1.items():
+                        textToDisplay.append("If dice:" + str(diceValue) + " from " + possibleKillTuple[0] + " to " + possibleKillTuple[1])
+        
+        if len(possibleKillsPlayer2) > 0:
+                textToDisplay.append('Tips for ' + playerNames[1] +" : ")
+                for possibleKillTuple, diceValue in possibleKillsPlayer2.items():
+                        textToDisplay.append("If dice:" + str(diceValue) + " from " + possibleKillTuple[0] + " to " + possibleKillTuple[1])
+
+        
         print("text", textToDisplay)
         return playerNames[0],playerNames[1], textToDisplay
 
-def displayGame(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove, FieldNumberingToKeypoints, preliminaryFilled):
+def displayGame(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove, FieldNumberingToKeypoints, preliminaryFilled, Game):
         w,h = 1000, 600
+        
         startBoardX, startStartY = 50, 50
-        player1, player2, textList = calculateStatesText(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove)
-        boardAnimated, preliminaryFilled =  calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players,  FieldNumberingToKeypoints, preliminaryFilled)
+        if handsMoving:
+                player1, player2 = Game.players
+                textList = Game.text
+                boardAnimated = Game.image
+
+                
+        else:
+                player1, player2, textList = calculateStatesText(masks, playersInCorners, reds, blues, yellows, greens, dice, handsMoving, players, lastMove)
+                Game.text = textList
+                boardAnimated, _ =  calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players,  FieldNumberingToKeypoints, preliminaryFilled)
+                Game.image = boardAnimated
+                Game.players = [player1, player2]
+                Game.addDiceValue(dice)
+        
         bw, wh = boardAnimated.shape[0], boardAnimated.shape[1]
 
         wholeDisplay = np.zeros((h,w,3), np.uint8)
@@ -272,65 +498,94 @@ def displayGame(masks, playersInCorners, reds, blues, yellows, greens, dice, han
         
         pixelsNextLine = 30
         
-        cv2.putText(wholeDisplay, player1.upper() + "  VS  "+ player2.upper(), (600,50 ), cv2.FONT_HERSHEY_TRIPLEX, 1,(203,192,255),3)
-        for i, textPiece in enumerate(textList):
-                cv2.putText(wholeDisplay, textPiece, (600,100 + i*pixelsNextLine), cv2.FONT_HERSHEY_TRIPLEX, 0.5,(255,255,255),2)
+        cv2.putText(wholeDisplay, player1.upper() + "  VS  "+ player2.upper(), (600,50), cv2.FONT_HERSHEY_TRIPLEX, 1,(203,192,255),2)
+        
+        if handsMoving:
+            cv2.putText(wholeDisplay, "Moving, wait for update...", (600,100 ), cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255,255,255),2)
+        for i, textPiece in enumerate(textList, start = 1):
+                cv2.putText(wholeDisplay, textPiece, (600,100 + i*pixelsNextLine), cv2.FONT_HERSHEY_TRIPLEX, 0.5,(255,255,255),1)
+        
+        dice = Game.dice
+        if dice > 0:
+            dicePic = dicePics[dice - 1]
+            startX, startY = 850, 130
+            wholeDisplay[startY: startY + 90, startX: startX + 90, :] = dicePic
         
         cv2.imshow("whole", wholeDisplay)
+        return Game
     
 
-def displayStatus():
-        pass
-        
+def setPlayers(red, blues, yellows, greens):
+        resultPlayes = [False, False, False, False]
+        playingPlayersIndices = list(dict(sorted(dict([(len(player) + random.random()/10,i) for i, player in enumerate([red, blues, yellows, greens])]).items())).values())[-2:]
+        for player in playingPlayersIndices:
+                resultPlayes[player] = True
+        return resultPlayes
+
+def skinDetection(image):
+        imageShow = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        maskSkin = cv2.inRange(imageShow, lowerSkin2, upperSkin2) + cv2.inRange(imageShow, lowerSkin1, upperSkin1)
+        imageShow = cv2.cvtColor(cv2.cvtColor(imageShow, cv2.COLOR_HSV2BGR), cv2.COLOR_BGR2GRAY)
+        imageShow[maskSkin < 100] = 0
+        imageShow = cv2.resize(imageShow, (image.shape[1]//2, image.shape[0]//2))
+        cv2.imshow("mask on skin", imageShow)
+        print("SCORE HANDS: ", np.sum(imageShow[:,:]))
+        return np.sum(imageShow[:,:])
+
+
 if __name__ == "__main__":
+    #needs to be initiated
+    Game = Game()
+    detectorDice = cv2.SimpleBlobDetector_create(paramsDice)
     colors = []
     for i in range(15):
         colors.append((randint(0, 255), randint(0, 255), randint(0, 255)))
-    cap = cv2.VideoCapture(input_video_path)
+    cap = cv2.VideoCapture(input_video_path_hard)
     boxes = dict()
     board_box = dict()
     recalculate_board = True
     
     ok, frame = cap.read()
+    
+    frame_2,  _, bboxes = find_squares(frame, boxes)
+    board = four_point_transform(frame, list(bboxes.values())[0])
+    rotation = getRotationNeeded(board)
+    boardRotated = cv2.rotate(board,rotation)
     frame_2,  _, bboxes = find_squares(frame, boxes)
     scale_percent = 50 # percent of original size
-
-    width = int(frame.shape[1] * scale_percent / 100)
-    height = int(frame.shape[0] * scale_percent / 100)
-    dim = (width, height)
-
-    resized = cv2.resize(frame_2, dim, interpolation = cv2.INTER_AREA)
-    #cv2.imshow("frame", resized)
-        
     res = cv2.waitKey(1)
     
     prev = cv2.imread('version2.png')
     dim = (500,500)
     FieldNumbering, FieldDescription = get_grid(prev)
     maskFieldExistance = createMaskFieldBoardExistance(FieldNumbering)
+    maskFieldsGlobal = getFieldsMask(maskFieldExistance).copy()
     maskFieldDescription = createDescriptiveBoard(FieldNumbering)
     prev = cv2.resize(prev, dim, interpolation = cv2.INTER_AREA)
-    #get_corner_players(prev)
-    bbox = (88, 68, 886, 920)
     multiTracker = cv2.MultiTracker_create()
     # Initialize MultiTracker
     for bbox in bboxes.values():
         for corner in bbox:
-                print(" corner: ", (corner[0], corner[1] , corner[0] + 20, corner[1] + 20))
                 for trackerType in trackerTypes:
-                        multiTracker.add(createTrackerByName(trackerType), frame, (corner[0] - WIDTH_BOXIE , corner[1] -WIDTH_BOXIE, 40, 40))
+                        multiTracker.add(createTrackerByName(trackerType), frame, (corner[0] - WIDTH_BOXIE , corner[1] -WIDTH_BOXIE, WIDTH_BOXIE*2, WIDTH_BOXIE*2))
     while(cap.isOpened()):
-        noHands = False
+        noHands = True
 
-        ret, frame = cap.read()
-        
-        frame_2, score = calculate_hands(frame, "lol")
-        if score < 15000000: # value set by trial and error
-                noHands = True
+        ret, frame = cap.read() 
+        frame_original_resized = cv2.resize(frame, (400,700), interpolation = cv2.INTER_AREA)
+        dice = getDiceValue(frame) # check if dice placement is same as compared to the four points od the board
+        scoreSkinDetection = skinDetection(frame)
+        Game.addnoHandsValue(scoreSkinDetection  < 2000000)
+        noHands = Game.noHands
+        print("NO HANDS", noHands)
+
+        if noHands: # value set by trial and error
                 success, boxes = multiTracker.update(frame)
-                pass
         
-
+        
+        frameresize = cv2.resize(frame, (int(frame.shape[1]*0.6), int(frame.shape[0]*0.6)))
+        cv2.imshow('frame', frameresize)
+        # cv2.waitKey(0)
         if ok:
                 for i, newbox in enumerate(boxes):
                         p1 = (int(newbox[0]), int(newbox[1]))
@@ -339,50 +594,28 @@ if __name__ == "__main__":
         else :
                 cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
 
-        if recalculate_board:
-                #frame2, tresh, boxes = find_squares(frame, boxes)
-                pass
-        #is_turned, frame2, prev = calculate_noise(frame, prev)
-        #frame2 = calculate_hands(frame)
         
-        # get mask
-        #frame2 = get_blobs(frame)
-        
-        frame = four_point_transform(frame, boxes)
-
-
+        board = four_point_transform(frame, boxes)
+        boardRotated = cv2.rotate(board, rotation)
         width = 500
         height = 500
         dim = (width, height)
-
-        resized_no_blobs = cv2.resize(frame, dim, interpolation = cv2.INTER_AREA)
-        #get_corner_players(resized_no_blobs)
-        
-        #cv2.imshow("frame with blobs", resized_blobs)
+        boardRotatedResized = cv2.resize(boardRotated, dim, interpolation = cv2.INTER_AREA)
         if prev is not None:
-                #print(f.shape, prev.shape)
-                difference1 = cv2.subtract(resized_no_blobs, prev )
-                difference2 = cv2.subtract(prev, resized_no_blobs )
-                difference = difference2
-                # color the mask red
-                Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
-                ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255, cv2.THRESH_BINARY_INV |cv2.THRESH_OTSU)
+                shadow = getShadowMask(boardRotatedResized, prev, maskFieldsGlobal)
+                prevShadowAccounted = cv2.addWeighted(prev, 1, shadow, -1, 0)
+                prevShadowAccounted = prev
+                boardRotatedResized = boardRotatedResized
+                difference2 = cv2.subtract(prevShadowAccounted, boardRotatedResized )
+                difference = cv2.cvtColor(difference2 , cv2.COLOR_BGR2GRAY)
                 blobous_difference, tokensPlacement = get_token_placement(difference, maskFieldExistance, maskFieldDescription)
-                reds, blues, yellows, greens = get_token_color_groups(resized_no_blobs,tokensPlacement,blobous_difference, maskFieldExistance)
-                
-                for redToken in reds:
-                        resized_no_blobs[maskFieldExistance[redToken - 1] == 255] = (0,0,255)
-                for greenToken in greens:
-                        resized_no_blobs[maskFieldExistance[greenToken - 1] == 255] = (0,255,0)
-                for blueToken in blues:
-                        resized_no_blobs[maskFieldExistance[blueToken - 1] == 255] = (255,0,0)
-                for yellowToken in yellows:
-                        resized_no_blobs[maskFieldExistance[yellowToken - 1] == 255] = (0,255,255)
-                cv2.imshow("difference", blobous_difference)
-                cv2.imshow("pastd tokens", resized_no_blobs)
-                
-                displayGame(maskFieldExistance, [True, False, False, True], reds, blues, yellows,greens, 5, False, [True, False, False, True], None, FieldNumbering, None)
-
+                reds, blues, yellows, greens = get_token_color_groups(boardRotatedResized,tokensPlacement,blobous_difference, maskFieldExistance)
+                if playersPlaying is None:
+                        playersPlaying = setPlayers(reds,blues,yellows,greens)
+                Game. heckForTokenPlacementEventKill(list(compress([reds, blues, yellows, greens], playersPlaying)))
+                cv2.imshow('d2', cv2.cvtColor(cv2.subtract( boardRotatedResized, prevShadowAccounted ) , cv2.COLOR_BGR2GRAY))
+                handsMoving = not noHands
+                Game = displayGame(maskFieldExistance, None, reds, blues, yellows, greens, dice, handsMoving, playersPlaying, None, FieldNumbering, None, Game)
         res = cv2.waitKey(1)
 
         # Stop if the user presses "q"

@@ -22,6 +22,23 @@ def add_shape(box, dict_boxes):
         dict_boxes[closest] = (dict_boxes[closest] + box)/2
 
 
+def chizzledBox(box, image):
+        '''
+        shaves off white boxels off of box:)
+        '''
+        tl = box[1]
+        br = box[3]
+        w,h = image.shape[1], image.shape[0]
+        OnlyBoardPixels = [(y,x) for y in range(tl[0], br[0] + 1) for x in range(tl[1], br[1] + 1) if image[x,y] == 0]
+        tl = np.array(min(OnlyBoardPixels, key= lambda x : x[1]+ x[0]))
+        br = np.array(max(OnlyBoardPixels, key= lambda x : x[1]+ x[0]))
+        tr = np.array(min(OnlyBoardPixels, key= lambda x : abs(w - x[1]+ x[0])))
+        bl = np.array(max(OnlyBoardPixels, key= lambda x : abs(w - x[1]+ x[0])))
+       
+        box = np.array([tr, tl, bl, br])
+        
+        return box
+        
 def find_squares(img, boxes):
     image = img.copy()
     # HEURISTIC : board not smaller than 30% of the board and not bigger than 90%
@@ -48,16 +65,33 @@ def find_squares(img, boxes):
             rect = cv2.minAreaRect(contour)
             box = cv2.boxPoints(rect)
             box = np.int0(box)
+            box = chizzledBox(box, close) # match the boz so that there are no black pixels on sides
             add_shape(box, boxes)
 
     for box in boxes.values():
         pts = np.array(box, np.int32)
         pts = pts.reshape((-1,1,2))
-        cv2.polylines(img,[pts],True,(0,255,0))
+        cv2.polylines(close,[pts],True,100)
+    img2 = cv2.resize(close,(int(close.shape[1]/2),int(close.shape[0]/2)))
+    #cv2.imshow("check delete later", img2)
+
+    
 
     return img, thresh, boxes
 
+def getShadowMask(img, originalBoard, maskFields):
+        lower = np.array([200]) #lower red color limit
+        upper = np.array([255]) # upper limit
+        mask = cv2.dilate(cv2.inRange(maskFields,lower,upper), np.ones((15, 15), np.uint8)) + maskOnBases
+        imgNoFields = img.copy()
+        originalNoFields = originalBoard.copy()
+        imgNoFields[maskFields > 100] = 0
+        originalNoFields[maskFields > 100] = 0
+        difference2 = cv2.subtract( originalNoFields, imgNoFields)
+        dst = cv2.inpaint(difference2,mask,3,cv2.INPAINT_TELEA)
+        return dst
 
+        
 def _getNextRegularField(regularFieldsUnvisited, regularFieldsVisited, lastPosition, i):
         if not regularFieldsUnvisited:
                 # stop if no points to visit
@@ -86,7 +120,6 @@ def createHashmapRegularFields(regularFields):
 
         regularFieldsVisited = dict([(i, keypoint) for i, keypoint in enumerate(list(topFields.values()))])
         regularFieldsUnvisited = dict([(key, value) for key, value in regularFields.items() if value not in regularFieldsVisited.values()])
-        print(regularFields, regularFieldsVisited)
         lastPosition = regularFieldsVisited[len(regularFieldsVisited) - 1].pt
 
 
@@ -118,7 +151,8 @@ def get_blobs(frame, draw = True, title = "default gray blob detection"):
         
         resized = cv2.resize(frame_copy, (500,500), interpolation = cv2.INTER_AREA)
         if draw:
-                cv2.imshow(title, resized)
+                #cv2.imshow(title, resized)
+                pass
         
         return frame_copy, blobs
 
@@ -254,6 +288,11 @@ def createMaskFieldBoardExistance(FieldNumbering):
 
         return masks
 
+def getFieldsMask(masks):
+        tempMask = masks[0]
+        for mask in masks[1:]:
+                tempMask += mask
+        return tempMask
 
 if __name__ == "__main__":
     
