@@ -1,9 +1,10 @@
 import cv2
 import numpy as np
 input_video_path = 'videos/IMG_1912.mp4'
-input_video_path_easy1 = 'videos/IMG_1912.mp4'
+input_video_path_easy1 = 'videos/easy.mp4'
 input_video_path_easy2 = 'videos/IMG_1912.mp4'
-input_video_path_hard = 'videos/easy.mp4'
+input_video_path_shadow = 'videos/weirdShadow.mp4'
+input_video_path_hard = 'videos/hard.mp4'
 
 # HEURISTIC: TODO ADJUST TO BOARD SIZE
 noise_level_non_turn = 3000
@@ -62,7 +63,7 @@ redBaseOffset = 56
 
 hsvGreenRange = range(40,80)
 hsvYellowRange = range(25,35)
-hsvBlueRange = range(90,130)
+hsvBlueRange = range(80,130)
 hsvRedRange1 = range(0,10)
 hsvRedRange2 = range(145,180)
 
