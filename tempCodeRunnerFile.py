@@ -8,13 +8,16 @@ from config import *
 from itertools import compress
 from random import randint
 from sklearn import cluster
+
 trackerTypes = ['BOOSTING'] #, 'MIL', 'KCF','TLD', 'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
 
 playersPlaying = None
+
 paramsDice = cv2.SimpleBlobDetector_Params()
 
 # Filter by Area
 paramsDice.filterByArea = True
+
 paramsDice.minArea = 30
 paramsDice.maxArea = 100
 # Filter by Circularity
@@ -258,7 +261,7 @@ def get_blobsDice(frame, detectorDice):
     return blobs, frameGray
 
 def get_dice_from_blobs(blobs):
-    
+  
     X = np.asarray([b.pt for b in blobs if b.pt != None])
     if len(X) > 0:
         # Important to set min_sample to 0, as a dice may only have one dot
@@ -274,6 +277,7 @@ def get_dice_from_blobs(blobs):
     else:
         return []
 
+
 # e.g. corners = [(2.0, 1.0), (4.0, 5.0), (7.0, 8.0)]
 def Area(corners):
     n = len(corners) # of corners
@@ -287,6 +291,7 @@ def Area(corners):
 
 def overlay_info(frameOriginal, dice, blobs):
     frame = frameOriginal.copy()
+
     if len(dice) > 0:
         dice = dice[0]
         # Overlay dice number
@@ -297,6 +302,7 @@ def overlay_info(frameOriginal, dice, blobs):
                         (int(dice[1] - textsize[0] / 2),
                         int(dice[2] + textsize[1] / 2)),
                         cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
+
         for blob in blobs:
                 cv2.circle(frame, (int(blob.pt[0]),int(blob.pt[1])), 3, (0, 255, 0), -1)
         return frame
@@ -474,8 +480,10 @@ def shadowCorrection(image, prev):
         returns new prev adjusted to shadow and score for hands moving, 
         if any of those scores differ significantly by hue (especially mask) then we know snth is up (hands moving)
         
+
         -> this turned out to be quite a bad idea
         '''
+
 def calculateBoardAnimation(masks, playersInCorners, reds, blues, yellows, greens, players, FieldNumberingToKeypoints, preliminaryFilled):
         '''
         1. Render animation of current state of board
@@ -600,7 +608,7 @@ def displayGame(masks, playersInCorners, reds, blues, yellows, greens, dice, han
             cv2.putText(wholeDisplay, "Moving, wait for update...", (600,100 ), cv2.FONT_HERSHEY_TRIPLEX, 0.5, (255,255,255),2)
         for i, textPiece in enumerate(textList, start = 1):
                 cv2.putText(wholeDisplay, textPiece, (600,100 + i*pixelsNextLine), cv2.FONT_HERSHEY_TRIPLEX, 0.5,(255,255,255),1)
-        
+
         dice = Game.dice
         if dice > 0:
             dicePic = dicePics[dice - 1]
@@ -665,9 +673,11 @@ def createMultitracker(bboxes, img_h, img_w):
       
 if __name__ == "__main__":
     #needs to be initiated
+
     out = cv2.VideoWriter('shadow3.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 15, (1000, 600))
     Game = Game()
     noHands_thereshold = []
+
     detectorDice = cv2.SimpleBlobDetector_create(paramsDice)
     colors = []
     for i in range(15):

@@ -29,7 +29,9 @@ lower_red_tokens = np.array([170, 150, 0], dtype="uint8")
 upper_red_tokens = np.array([180, 255, 255], dtype="uint8")
 
 HANDS_OCCURANCE_THERESHOLD = 15000000
+
 WIDTH_BOXIE = 30
+
 R_CIRCLE_FIELD = 36
 R_CIRCLE_ACCEPTANCE_THERESHOLD = 0.1
 R_TOKEN = 15
@@ -86,6 +88,7 @@ heartStencilTemp = cv2.cvtColor(cv2.cv2.imread('heartStencil.png'), cv2.COLOR_BG
 heartStencil = cv2.threshold(heartStencilTemp, 0, 150, cv2.THRESH_BINARY_INV)[1]
 
 dicePics = [cv2.imread('dice/' + str(i) + '.png') for i in range(1,7)]
+
 maskOnBases = cv2.imread('maskOnBases.png', cv2.IMREAD_GRAYSCALE)
 
 
@@ -94,3 +97,4 @@ upperSkin1 = np.array([7, 255, 255], dtype = "uint8")
 
 lowerSkin2 = np.array([160, 0, 0], dtype = "uint8")
 upperSkin2 = np.array([180, 255, 255], dtype = "uint8")
+
