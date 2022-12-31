@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
 input_video_path = 'videos/IMG_1912.mp4'
+input_video_path_easy1 = 'videos/easy.mp4'
+input_video_path_easy2 = 'videos/IMG_1912.mp4'
+input_video_path_shadow = 'videos/weirdShadow.mp4'
+input_video_path_hard = 'videos/hard.mp4'
 
 # HEURISTIC: TODO ADJUST TO BOARD SIZE
 noise_level_non_turn = 3000
@@ -25,7 +29,9 @@ lower_red_tokens = np.array([170, 150, 0], dtype="uint8")
 upper_red_tokens = np.array([180, 255, 255], dtype="uint8")
 
 HANDS_OCCURANCE_THERESHOLD = 15000000
-WIDTH_BOXIE = 20
+
+WIDTH_BOXIE = 30
+
 R_CIRCLE_FIELD = 36
 R_CIRCLE_ACCEPTANCE_THERESHOLD = 0.1
 R_TOKEN = 15
@@ -59,7 +65,7 @@ redBaseOffset = 56
 
 hsvGreenRange = range(40,80)
 hsvYellowRange = range(25,35)
-hsvBlueRange = range(105,130)
+hsvBlueRange = range(80,130)
 hsvRedRange1 = range(0,10)
 hsvRedRange2 = range(145,180)
 
@@ -74,7 +80,7 @@ startingFields = [33,3,23,13]
 
 # ANIMATION : 
 beigeColor = (203, 215, 223)
-# red, blue, yellow, green
+# red, blue, yellow, greenq
 tokenColors = [(0,0,255),(255,0,0), (0,255,255), (0,255,0)]
 specialFieldColors = [(132,135,240),(195,175,122), (137,174,225), (158,200,178)]
 ROfToken = 10
@@ -82,3 +88,13 @@ heartStencilTemp = cv2.cvtColor(cv2.cv2.imread('heartStencil.png'), cv2.COLOR_BG
 heartStencil = cv2.threshold(heartStencilTemp, 0, 150, cv2.THRESH_BINARY_INV)[1]
 
 dicePics = [cv2.imread('dice/' + str(i) + '.png') for i in range(1,7)]
+
+maskOnBases = cv2.imread('maskOnBases.png', cv2.IMREAD_GRAYSCALE)
+
+
+lowerSkin1 = np.array([0, 0, 0], dtype = "uint8")
+upperSkin1 = np.array([7, 255, 255], dtype = "uint8")
+
+lowerSkin2 = np.array([160, 0, 0], dtype = "uint8")
+upperSkin2 = np.array([180, 255, 255], dtype = "uint8")
+

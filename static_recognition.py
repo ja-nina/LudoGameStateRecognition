@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import itertools
 import random
+from collections import Counter
+
 
 from scipy.spatial.distance import cdist
 from config import *
@@ -21,7 +23,58 @@ def add_shape(box, dict_boxes):
     else:
         dict_boxes[closest] = (dict_boxes[closest] + box)/2
 
+def makeBoxGrayAndBlurred(image):
+        return cv2.GaussianBlur(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY),(7, 7), 0)
 
+def  multimode(lista):
+        return Counter(lista).most_common(1)[0][0]
+
+def getCentermostBlackPixels(originalCoords, image, bias, title = 'lol'):
+        blackPixels = [[x,y] for x,y in list(itertools.product(range(image.shape[0]), range(image.shape[1]))) if image[x][y] < 100]
+        y = multimode([e[1] for e in blackPixels])
+        x = multimode([e[0] for e in blackPixels])
+        cv2.circle(image, (y, x), 5, (0, 0, 255), -1)
+        return (originalCoords[0] + y - bias[0], originalCoords[1] + x - bias[1])
+
+def fixEdges(image):
+    # if edges are the same but one do not update this one edge
+    pass
+    
+def orderBoxes(boxes):
+        boxCooords = [box[:2] for box in boxes]
+        #print(list(sorted(dict([(c[0] + c[1], [c[0], c[1]]) for c in boxCooords]).items())))
+        suma1 = list(dict(list(sorted(dict([(c[0] + c[1], [c[0], c[1]]) for c in boxCooords]).items()))).values())
+        suma2 = list(dict(list(sorted(dict([(c[0] - c[1], [c[0], c[1]]) for c in boxCooords]).items()))).values())
+        tl = suma1[0]
+        br = suma1[-1]
+        tr = suma2[-1]
+        bl = suma2[0]
+        return [tl, br, tr, bl]
+
+        
+def chizzledBox(box, image):
+        '''
+        chizzle the bounding boxes
+        '''
+        biasX, biasY = 50,50
+        tl, br, tr, bl = orderBoxes(box)
+
+        trGrayBlurred = cv2.GaussianBlur(cv2.cvtColor(image[tr[1] - biasX: tr[1] + biasX, tr[0] - biasY: tr[0] + biasY,:], cv2.COLOR_BGR2GRAY),(7, 7), 0)
+        trBox = cv2.adaptiveThreshold(trGrayBlurred, 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv2.THRESH_BINARY,11,2)
+        tlBox = cv2.adaptiveThreshold(makeBoxGrayAndBlurred(image[tl[1] - biasX: tl[1] + biasX, tl[0] - biasY: tl[0] + biasY,:]), 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv2.THRESH_BINARY,11,2)
+        brBox = cv2.adaptiveThreshold(makeBoxGrayAndBlurred(image[br[1] - biasX: br[1] + biasX, br[0] - biasY: br[0] + biasY,:]), 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv2.THRESH_BINARY,11,2)
+        blBox = cv2.adaptiveThreshold(makeBoxGrayAndBlurred(image[bl[1] - biasX: bl[1] + biasX, bl[0] - biasY: bl[0] + biasY,:]), 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv2.THRESH_BINARY,11,2)
+        bl = getCentermostBlackPixels(bl, blBox, [biasX, biasY], "lol1")
+        br = getCentermostBlackPixels(br, brBox, [biasX, biasY], "lol2")
+        tl = getCentermostBlackPixels(tl, tlBox, [biasX, biasY], "lol3")
+        tr = getCentermostBlackPixels(tr, trBox, [biasX, biasY], "lol4")
+        box = np.array([tr, tl, bl, br])
+        return box
+        
 def find_squares(img, boxes):
     image = img.copy()
     # HEURISTIC : board not smaller than 30% of the board and not bigger than 90%
@@ -30,34 +83,58 @@ def find_squares(img, boxes):
     upper_bound_board_size = 0.9 * size_of_image
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.medianBlur(gray, 5)
-    sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    sharpen = cv2.filter2D(blur, -1, sharpen_kernel)
+    blur = cv2.medianBlur(gray, 9)
 
     # Threshold and morph close
-    thresh = cv2.threshold(sharpen, 150, 255, cv2.THRESH_BINARY_INV)[1]
+    #thresh = cv2.threshold(sharpen, 150, 255, cv2.THRESH_BINARY_INV)[1]
+    trGrayBlurred = cv2.GaussianBlur(blur,(7, 7), 0)
+    thresh = cv2.adaptiveThreshold(trGrayBlurred, 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv2.THRESH_BINARY,11,2)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
     close = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
-    cnts, _ = cv2.findContours(close, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-
+    close =  cv2.Canny(img,250,100)
+    cv2.imshow(" contours for recognition!", cv2.resize(close, (700,400)))
+    cv2.waitKey(4000)
+    cnts, _ = cv2.findContours(close, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.imshow(" image for chizzeling", cv2.resize(close, (700,400)))
+    i = 0
     for contour in cnts:
+        i+=1
         approx = cv2.approxPolyDP(contour, 0.01* cv2.arcLength(contour, True), True)
         x, y , w, h = cv2.boundingRect(approx)
         aspectRatio = float(w)/h
+        imageCopy = img.copy()
+        # cv2.drawContours(imageCopy, contour, -1, (0, 255, 0), 3)
+        # cv2.imshow("title"+ str(i), imageCopy)
+        # cv2.waitKey(4000)
         if  aspectRatio >0.9 and aspectRatio < 1.1 and cv2.contourArea(contour) > 100 and len(approx)< 10 and cv2.contourArea(contour) > lower_bound_board_size and cv2.contourArea(contour) < upper_bound_board_size:
             rect = cv2.minAreaRect(contour)
             box = cv2.boxPoints(rect)
+            #print("unchizzled box: ", box)
             box = np.int0(box)
+            box = chizzledBox(box, image) # match the boz so that there are no black pixels on sides
+            #print("chizzled box: ", box)
             add_shape(box, boxes)
-
+        
     for box in boxes.values():
         pts = np.array(box, np.int32)
         pts = pts.reshape((-1,1,2))
-        cv2.polylines(img,[pts],True,(0,255,0))
-
+        cv2.polylines(close,[pts],True,100)
     return img, thresh, boxes
 
+def getShadowMask(img, originalBoard, maskFields):
+        lower = np.array([200]) # mask is arbitrary
+        upper = np.array([255]) 
+        mask = cv2.dilate(cv2.inRange(maskFields,lower,upper), np.ones((15, 15), np.uint8)) + maskOnBases
+        imgNoFields = img.copy()
+        originalNoFields = originalBoard.copy()
+        imgNoFields[mask > 100] = 0
+        originalNoFields[mask > 100] = 0
+        lights = cv2.subtract(originalNoFields, imgNoFields)
+        dstLights = cv2.inpaint(lights,mask,5,cv2.INPAINT_TELEA)
+        return dstLights
 
+        
 def _getNextRegularField(regularFieldsUnvisited, regularFieldsVisited, lastPosition, i):
         if not regularFieldsUnvisited:
                 # stop if no points to visit
@@ -86,7 +163,6 @@ def createHashmapRegularFields(regularFields):
 
         regularFieldsVisited = dict([(i, keypoint) for i, keypoint in enumerate(list(topFields.values()))])
         regularFieldsUnvisited = dict([(key, value) for key, value in regularFields.items() if value not in regularFieldsVisited.values()])
-        print(regularFields, regularFieldsVisited)
         lastPosition = regularFieldsVisited[len(regularFieldsVisited) - 1].pt
 
 
@@ -118,7 +194,8 @@ def get_blobs(frame, draw = True, title = "default gray blob detection"):
         
         resized = cv2.resize(frame_copy, (500,500), interpolation = cv2.INTER_AREA)
         if draw:
-                cv2.imshow(title, resized)
+                #cv2.imshow(title, resized)
+                pass
         
         return frame_copy, blobs
 
@@ -254,6 +331,11 @@ def createMaskFieldBoardExistance(FieldNumbering):
 
         return masks
 
+def getFieldsMask(masks):
+        tempMask = masks[0]
+        for mask in masks[1:]:
+                tempMask += mask
+        return tempMask
 
 if __name__ == "__main__":
     
