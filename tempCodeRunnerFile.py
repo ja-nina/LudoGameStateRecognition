@@ -189,10 +189,8 @@ class Game(object):
                 
                 
         def isDifferenceOk(self):
-                print("now difference: " + str(str(self.difference)))
                 
                 if len(self.differenceSeries) >0:
-                        print("past difference: " + str(self.differenceSeries[0]))
                         if self.difference < 1.2 * self.differenceSeries[0]:
                                 return True
                         else:
@@ -219,7 +217,6 @@ class Game(object):
                 
                 differenceP1revised = [element for element in differenceP1 if element < 41]
                 differenceP2revised = [element for element in differenceP2 if element < 41]
-                #print(" difference revised", differenceP1revised, differenceP2revised, reallyPossibleKills)
                 
                 if len(differenceP1revised) > 0:
                         movements1 = [movement for movement in reallyPossibleKills.items() if (movement[0] in differenceP1revised and movement[1] in differenceP1revised)] 
@@ -240,8 +237,6 @@ class Game(object):
                 if len(differenceP1revised) > 0 or len(differenceP2revised) > 0:
                         movements = movements1 + movements2
                         self.tokenPlacements = supposedNewTokenPlacements
-                        #print('movements', movements)
-                        #print('kills', kills)
 
                         
                         if self.Events != "":
@@ -451,7 +446,6 @@ def getRotationNeeded(boardie):
         temp_starting_point4 = (width_board - width_base - margin_r, heigh_board - heigh_base - margin_b)
         temp_endpoint4 = add_tuples(temp_starting_point4, box)
         cv2.rectangle(board, temp_starting_point4, temp_endpoint4, green, 2, 1)
-        cv2.imshow('board', board)
 
         
         
@@ -463,10 +457,7 @@ def getRotationNeeded(boardie):
                 np.sum(h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]]),
                 np.sum(h[temp_starting_point3[1]:temp_endpoint3[1], temp_starting_point3[0]:temp_endpoint3[0]]),
                 np.sum(h[temp_starting_point4[1]:temp_endpoint4[1], temp_starting_point4[0]:temp_endpoint4[0]])]
-        #print(sums)
-        cv2.imshow(".lol", h[temp_starting_point2[1]:temp_endpoint2[1], temp_starting_point2[0]:temp_endpoint2[0]])
         whichIsRed = np.argmax(sums)
-        print(" which is red", whichIsRed)
         return results[whichIsRed]
 
 def shadowCorrection(image, prev):
@@ -638,23 +629,18 @@ def skinDetection(image, boxes):
         imageShow = cv2.cvtColor(cv2.cvtColor(imageShow, cv2.COLOR_HSV2BGR), cv2.COLOR_BGR2GRAY)
         imageShow[maskSkin < 100] = 0
         weightedImageShow = weights * imageShow
-        #weightedImageShow2display = cv2.resize(weightedImageShow, (700, 400)) 
-        #print("SCORE HANDS: ", np.sum(weightedImageShow[:,:]))
         return np.sum(weightedImageShow[:,:])
 
 def computeSizeOfBoardByBoundingBoxes(boxes):
         corners = [element[:2] for element in boxes]
         area = Area(corners)
-        print(area)
         return area
 
 def createMultitracker(bboxes, img_h, img_w):
         multiTracker = cv2.MultiTracker_create()
         # Initialize MultiTracker
         for bbox in bboxes:
-                #print(bbox)
                 for corner in bbox:
-                        #print(corner)
                         x_temp = max(corner[0] - WIDTH_BOXIE, 0)
                         y_temp = max(corner[1] - WIDTH_BOXIE, 0)
                         x_w = min(max(img_w - x_temp,0), 2*WIDTH_BOXIE)
@@ -681,7 +667,6 @@ if __name__ == "__main__":
     ok, frame = cap.read()
     
     frame_2,  _, bboxes = find_squares(frame, boxes)
-    print(bboxes)
     board = four_point_transform(frame, list(bboxes.values())[0])
     rotation = getRotationNeeded(board)
     if rotation is not None:
@@ -724,7 +709,6 @@ if __name__ == "__main__":
 
                 Game.addnoHandsValue(scoreSkinDetection  <= theresholdNH) # set by trial and error
                 noHands = Game.noHands
-                print("NO HANDS", noHands, Game.noHandsSeries, scoreSkinDetection)
 
                 if noHands: 
                         if boxesMultitracker is not None:
@@ -735,7 +719,6 @@ if __name__ == "__main__":
                         currentArea = computeSizeOfBoardByBoundingBoxes(boxesMultitracker)
                         Game.boardSize = currentArea
                         if prevArea is not None and (not (currentArea > prevArea*0.995 and currentArea < prevArea* 1.005) or Game.isDifferenceOk() == False):
-                                print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA recalc!")
                                 frame_2,  _, bboxes = find_squares(frame, boxes)
                                 multiTracker = createMultitracker(list(bboxes.values()), frame.shape[0], frame.shape[1])
                                 success, boxesMultitracker = multiTracker.update(frame)
@@ -752,14 +735,13 @@ if __name__ == "__main__":
                                 cv2.rectangle(frame, p1, p2, colors[i], 2, 1)
                 else :
                         cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
-                cv2.imshow('frame', cv2.resize(frame, (700, 400)))
+
                 
                 board = four_point_transform(frame, boxesMultitracker)
                 if rotation is not None:
                         boardRotated = cv2.rotate(board, rotation)
                 else:
                         boardRotated = board
-                #print("ROTATION!",rotation)
                 width = 500
                 height = 500
                 dim = (width, height)
@@ -775,17 +757,13 @@ if __name__ == "__main__":
                         difference2 = cv2.subtract(prevShadowAccounted, boardRotatedResized)
                         difference = cv2.cvtColor(difference2 , cv2.COLOR_BGR2GRAY)
                         Game.difference = np.sum(difference[:,:])
-                        print(" difference sum ",  np.sum(difference[:,:]))
-                        print(boardRotatedResized)
                         blobous_difference, tokensPlacement = get_token_placement(difference, maskFieldExistance, maskFieldDescription, not playersPlaying is None)
                         reds, blues, yellows, greens = get_token_color_groups(boardRotatedResized,tokensPlacement,blobous_difference, maskFieldExistance)
                         if playersPlaying is None:
                                 playersPlaying = setPlayers(reds,blues,yellows,greens)
                         Game.checkForTokenPlacementEventKill(list(compress([reds, blues, yellows, greens], playersPlaying)))
                         
-                        
-                        ### if difference is weirdly big reset tracker if no hands
-                        cv2.imshow('d2', difference2)
+            
                 handsMoving = not noHands
                 Game = displayGame(maskFieldExistance, None, reds, blues, yellows, greens, dice, handsMoving, playersPlaying, None, FieldNumbering, None, Game)
         res = cv2.waitKey(1)
