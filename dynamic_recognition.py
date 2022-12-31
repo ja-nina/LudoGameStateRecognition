@@ -7,7 +7,6 @@ def four_point_transform(image, pts):
     '''
     Transforms photo of board in a weird angle into nice board that can be compared to field placements of original
     '''
-    #print(pts)
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
     widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
@@ -73,8 +72,6 @@ def get_token_color_groups(board, tokenFields, difference, masksExistance):
     greens = []
     boardHsv = cv2.cvtColor(board, cv2.COLOR_BGR2HSV)
     h = boardHsv[:,:,0]
-    cv2.imshow('board in take token color group ', cv2.resize(board, (500,500) ))
-    cv2.imshow('difference in take token color group ', cv2.resize(difference, (500,500) ))
     for tokenField in tokenFields:
         wights = difference[masksExistance[tokenField- 1] > 0]
         max_weight = max(wights) + 1
@@ -89,8 +86,7 @@ def get_token_color_groups(board, tokenFields, difference, masksExistance):
 
 def find_color(colorHues, reds, blues, yellows, greens):
     
-    for token_field, colorHue in reversed(list(colorHues.items())):
-        print(token_field, colorHue)
+    for token_field, colorHue in list(colorHues.items()):
         if int(colorHue) in hsvRedRange1 or int(colorHue) in hsvRedRange2 and len(reds) < 4:
             reds.append(token_field)   
         elif int(colorHue) in hsvBlueRange and len(blues) < 4:

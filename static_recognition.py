@@ -42,7 +42,6 @@ def fixEdges(image):
     
 def orderBoxes(boxes):
         boxCooords = [box[:2] for box in boxes]
-        #print(list(sorted(dict([(c[0] + c[1], [c[0], c[1]]) for c in boxCooords]).items())))
         suma1 = list(dict(list(sorted(dict([(c[0] + c[1], [c[0], c[1]]) for c in boxCooords]).items()))).values())
         suma2 = list(dict(list(sorted(dict([(c[0] - c[1], [c[0], c[1]]) for c in boxCooords]).items()))).values())
         tl = suma1[0]
@@ -93,27 +92,18 @@ def find_squares(img, boxes):
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
     close = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
     close =  cv2.Canny(img,250,100)
-    cv2.imshow(" contours for recognition!", cv2.resize(close, (700,400)))
-    cv2.waitKey(4000)
     cnts, _ = cv2.findContours(close, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.imshow(" image for chizzeling", cv2.resize(close, (700,400)))
     i = 0
     for contour in cnts:
         i+=1
         approx = cv2.approxPolyDP(contour, 0.01* cv2.arcLength(contour, True), True)
         x, y , w, h = cv2.boundingRect(approx)
         aspectRatio = float(w)/h
-        imageCopy = img.copy()
-        # cv2.drawContours(imageCopy, contour, -1, (0, 255, 0), 3)
-        # cv2.imshow("title"+ str(i), imageCopy)
-        # cv2.waitKey(4000)
         if  aspectRatio >0.9 and aspectRatio < 1.1 and cv2.contourArea(contour) > 100 and len(approx)< 10 and cv2.contourArea(contour) > lower_bound_board_size and cv2.contourArea(contour) < upper_bound_board_size:
             rect = cv2.minAreaRect(contour)
             box = cv2.boxPoints(rect)
-            #print("unchizzled box: ", box)
             box = np.int0(box)
             box = chizzledBox(box, image) # match the boz so that there are no black pixels on sides
-            #print("chizzled box: ", box)
             add_shape(box, boxes)
         
     for box in boxes.values():
@@ -342,6 +332,4 @@ if __name__ == "__main__":
     prev = cv2.imread('version2.png')
     FieldNumbering, FieldDescription = get_grid(prev)
     masks = createMaskFieldBoardExistance(FieldNumbering)
-    cv2.imshow("mask wow", masks[1])
-    cv2.waitKey(0)
     
